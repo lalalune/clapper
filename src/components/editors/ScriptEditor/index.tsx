@@ -1,298 +1,183 @@
-"use client";
-import { TimelineStore, useTimeline } from "@aitube/timeline";
-import Editor, { Monaco, OnMount } from "@monaco-editor/react";
-import * as MonacoEditor from "monaco-editor";
-import { useEffect, useRef } from "react";
+import React, { useEffect } from "react"
+import MonacoEditor from "monaco-editor"
+import Editor, { Monaco } from "@monaco-editor/react"
+import {
+  leftBarTrackScaleWidth,
+  TimelineStore,
+  useTimeline,
+} from "@aitube/timeline"
 
-import { useScriptEditor } from "@/services/editors/script-editor/useScriptEditor";
-import { useUI } from "@/services/ui";
-import { themes } from "@/services/ui/theme";
+import { useScriptEditor } from "@/services/editors/script-editor/useScriptEditor"
+import { useUI } from "@/services/ui"
+import { themes } from "@/services/ui/theme"
 
-import "./styles.css";
-
-export const fountainLanguageId = "fountain";
+import "./styles.css"
 
 export function ScriptEditor() {
-  const standaloneCodeEditor = useScriptEditor((s) => s.standaloneCodeEditor);
+  const standaloneCodeEditor = useScriptEditor((s) => s.standaloneCodeEditor)
   const setStandaloneCodeEditor = useScriptEditor(
     (s) => s.setStandaloneCodeEditor,
-  );
-  const draft = useScriptEditor((s) => s.draft);
-  const setDraft = useScriptEditor((s) => s.setDraft);
-  const loadDraftFromClap = useScriptEditor((s) => s.loadDraftFromClap);
-  const onDidScrollChange = useScriptEditor((s) => s.onDidScrollChange);
-  const jumpCursorOnLineClick = useScriptEditor((s) => s.jumpCursorOnLineClick);
+  )
+  const current = useScriptEditor((s) => s.current)
+  const setCurrent = useScriptEditor((s) => s.setCurrent)
+  const publish = useScriptEditor((s) => s.publish)
+  const loadDraftFromClap = useScriptEditor((s) => s.loadDraftFromClap)
+  const onDidScrollChange = useScriptEditor((s) => s.onDidScrollChange)
+  const jumpCursorOnLineClick = useScriptEditor((s) => s.jumpCursorOnLineClick)
 
-  const clap = useTimeline((s: TimelineStore) => s.clap);
-
-  const editorRef = useRef<MonacoEditor.editor.IStandaloneCodeEditor | null>(
-    null,
-  );
-  const monacoRef = useRef<Monaco | null>(null);
+  const clap = useTimeline((s: TimelineStore) => s.clap)
 
   useEffect(() => {
-    if (clap && clap.meta.screenplay) {
-      loadDraftFromClap(clap);
+    loadDraftFromClap(clap)
+  }, [clap])
+
+  const scrollHeight = useScriptEditor((s) => s.scrollHeight)
+
+  const scrollX = useTimeline((s) => s.scrollX)
+  const contentWidth = useTimeline((s) => s.contentWidth)
+  const horizontalTimelineRatio = Math.round(
+    ((scrollX - leftBarTrackScaleWidth) / contentWidth) * scrollHeight - 31,
+  )
+
+  useEffect(() => {
+    if (!standaloneCodeEditor) {
+      return
     }
-  }, [clap, loadDraftFromClap]);
+    // let's do something basic for now: we disable the
+    // timeline-to-editor scroll sync when the user is
+    // hovering the editor
+    if (useScriptEditor.getState().mouseIsInside) {
+      return
+    }
 
-  const onMount: OnMount = (editor, monaco) => {
-    editorRef.current = editor;
-    monacoRef.current = monaco;
-    setStandaloneCodeEditor(editor);
+    if (horizontalTimelineRatio !== standaloneCodeEditor.getScrollTop()) {
+      standaloneCodeEditor.setScrollPosition({
+        scrollTop: horizontalTimelineRatio,
+      })
+    }
+    // various things we can do here!
+    // move the scroll:
+    // editor.setScrollPosition({ scrollTop: horizontalTimelineRatio })
 
-    editor.onMouseDown((e) => {
-      const position = editor.getPosition();
-      if (position) {
-        jumpCursorOnLineClick(position.lineNumber);
-      }
-    });
+    // Scroll to a specific line:
+    // editor.revealLine(15)
 
-    editor.onDidScrollChange(
-      ({ scrollTop, scrollLeft, scrollWidth, scrollHeight }) => {
-        onDidScrollChange({ scrollTop, scrollLeft, scrollWidth, scrollHeight });
+    // Scroll to a specific line so it ends in the center of the editor:
+    // editor.revealLineInCenter(15)
+
+    // Move current active line:
+    // editor.setPosition({column: 1, lineNumber: 3})
+
+    // => I think we should restore the "follow cursor during playback"
+    // feature, because this is doable.
+  }, [standaloneCodeEditor, horizontalTimelineRatio])
+
+  const onMount = (codeEditor: MonacoEditor.editor.IStandaloneCodeEditor) => {
+    const { textModel } = useScriptEditor.getState()
+    if (!textModel) {
+      return
+    }
+
+    codeEditor.setModel(textModel)
+
+    setStandaloneCodeEditor(codeEditor)
+
+    codeEditor.onMouseDown((e) => {
+      jumpCursorOnLineClick(codeEditor.getPosition()?.lineNumber)
+    })
+
+    codeEditor.onDidScrollChange(
+      ({
+        scrollTop,
+        scrollLeft,
+        scrollWidth,
+        scrollHeight,
+      }: MonacoEditor.IScrollEvent) => {
+        onDidScrollChange({ scrollTop, scrollLeft, scrollWidth, scrollHeight })
       },
-    );
+    )
 
-    editor.onDidChangeModelContent(() => {
-      const updatedDraft = editor.getValue();
-      setDraft(updatedDraft);
-    });
+    // as an optimization we can use this later, for surgical edits,
+    // to perform real time updates of the timeline
 
-    // Apply the theme and update the editor
-    monaco.editor.setTheme(themeName);
-    editor.updateOptions({
-      fontSize: editorFontSize,
-      folding: true,
-      foldingStrategy: "auto",
-      foldingHighlight: true,
-      showFoldingControls: "always",
-    });
-
-    applyCollapsibleRanges(editor, monaco);
-    editor.onDidChangeModelContent(() => {
-      applyCollapsibleRanges(editor, monaco);
-    });
-
-    // Force a re-render of the editor and trigger syntax highlighting
-    setTimeout(() => {
-      editor.layout();
-      editor.render(true);
-
-      // Force re-tokenization to apply syntax highlighting
-      const model = editor.getModel();
-      if (model) {
-        const fullRange = model.getFullModelRange();
-        model.tokenization.forceTokenization(fullRange.endLineNumber);
-      }
-    }, 50);
-  };
-
-  const applyCollapsibleRanges = (
-    editor: MonacoEditor.editor.IStandaloneCodeEditor,
-    monaco: Monaco,
-  ) => {
-    const model = editor.getModel();
-    if (!model) return;
-
-    const text = model.getValue();
-    const lines = text.split("\n");
-    const foldingRanges: MonacoEditor.languages.FoldingRange[] = [];
-
-    let sceneStart = -1;
-    let characterStart = -1;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-
-      // Scene heading
-      if (line.match(/^(INT|EXT|EST|INT\.\/EXT\.)/i)) {
-        if (sceneStart !== -1) {
-          foldingRanges.push({
-            start: sceneStart + 1,
-            end: i,
-            kind: monaco.languages.FoldingRangeKind.Region,
-          });
-        }
-        sceneStart = i;
-      }
-      // Character name
-      else if (line.match(/^[A-Z][A-Z0-9\s]*(\(.*\))?$/)) {
-        if (characterStart !== -1) {
-          foldingRanges.push({
-            start: characterStart + 1,
-            end: i,
-            kind: monaco.languages.FoldingRangeKind.Region,
-          });
-        }
-        characterStart = i;
-      }
-      // End of dialogue block or scene description
-      else if (line === "") {
-        if (characterStart !== -1) {
-          foldingRanges.push({
-            start: characterStart + 1,
-            end: i,
-            kind: monaco.languages.FoldingRangeKind.Region,
-          });
-          characterStart = -1;
+    /*
+    textModel.onDidChangeContent(
+      (
+        modelContentChangedEvent: MonacoEditor.editor.IModelContentChangedEvent
+      ) => {
+        console.log('onDidChangeContent:')
+        for (const change of modelContentChangedEvent.changes) {
+          console.log(" - change:", change)
         }
       }
-    }
+    )
+      */
+  }
 
-    // Handle case where script ends with an unclosed scene or dialogue block
-    if (sceneStart !== -1) {
-      foldingRanges.push({
-        start: sceneStart + 1,
-        end: lines.length,
-        kind: monaco.languages.FoldingRangeKind.Region,
-      });
-    }
-    if (characterStart !== -1) {
-      foldingRanges.push({
-        start: characterStart + 1,
-        end: lines.length,
-        kind: monaco.languages.FoldingRangeKind.Region,
-      });
-    }
+  const setMonaco = useScriptEditor((s) => s.setMonaco)
+  const setTextModel = useScriptEditor((s) => s.setTextModel)
+  const setMouseIsInside = useScriptEditor((s) => s.setMouseIsInside)
+  const themeName = useUI((s) => s.themeName)
+  const editorFontSize = useUI((s) => s.editorFontSize)
 
-    monaco.languages.registerFoldingRangeProvider(fountainLanguageId, {
-      provideFoldingRanges: () => foldingRanges,
-    });
-  };
+  const beforeMount = (monaco: Monaco) => {
+    setMonaco(monaco)
 
-  const setMonaco = useScriptEditor((s) => s.setMonaco);
-  const setTextModel = useScriptEditor((s) => s.setTextModel);
-  const setMouseIsInside = useScriptEditor((s) => s.setMouseIsInside);
-  const themeName = useUI((s) => s.themeName);
-  const editorFontSize = useUI((s) => s.editorFontSize);
-
-  const beforeMount = async (monaco: Monaco) => {
-    setMonaco(monaco);
-
-    function registerFountainLanguage(monaco: Monaco) {
-      const fountainTokenProvider: MonacoEditor.languages.IMonarchLanguage = {
-        defaultToken: "",
-        tokenPostfix: ".fountain",
-
-        tokenizer: {
-          root: [
-            [/^#.*$/, "comment"],
-            [/^(INT|EXT|EST|INT\.\/EXT\.)\s*.*$/, "sceneHeading"],
-            [/^[A-Z][A-Z0-9\s]*(\(.*\))?$/, "character"],
-            [/^\(.*\)$/, "parenthetical"],
-            [/^>.*$/, "transition"],
-            [/^\[\[.*\]\]$/, "note"],
-            [/^===.*$/, "pageBreak"],
-            [/^=.*$/, "synopsisSeparator"],
-            [/^\..*$/, "sceneNumber"],
-            [/^\*.*$/, "emphasis"],
-            [/^_.*_$/, "underline"],
-            [/^\s*$/, "emptyLine"],
-            [/^[^A-Z\n]+$/, "dialogue"],
-            [/^.*$/, "action"],
-          ],
-        },
-      };
-      monaco.languages.register({ id: fountainLanguageId });
-      monaco.languages.setMonarchTokensProvider(
-        fountainLanguageId,
-        fountainTokenProvider,
-      );
-    }
-
-    registerFountainLanguage(monaco);
-
+    // create our themes
     for (const theme of Object.values(themes)) {
+      // console.log("loading editor theme:", theme)
+      // Define a custom theme with the provided color palette
       monaco.editor.defineTheme(theme.id, {
-        base: "vs-dark",
-        inherit: true,
+        base: "vs-dark", // Base theme (you can change to vs for a lighter theme if preferred)
+        inherit: true, // Inherit the default rules
         rules: [
-          {
-            token: "",
-            foreground: theme.editorTextColor || theme.defaultTextColor || "",
-          },
-          { token: "comment", foreground: "#6A9955" },
-          { token: "sceneHeading", foreground: "#4EC9B0", fontWeight: "bold" },
-          { token: "character", foreground: "#DCDCAA", fontWeight: "bold" },
-          { token: "parenthetical", foreground: "#9CDCFE" },
-          { token: "dialogue", foreground: "#D4D4D4" },
-          { token: "transition", foreground: "#CE9178", fontStyle: "italic" },
-          { token: "note", foreground: "#6796E6" },
-          { token: "pageBreak", foreground: "#D16969" },
-          { token: "synopsisSeparator", foreground: "#608B4E" },
-          { token: "sceneNumber", foreground: "#B5CEA8" },
-          { token: "emphasis", foreground: "#D4D4D4", fontStyle: "italic" },
-          { token: "underline", foreground: "#D4D4D4", fontStyle: "underline" },
-          { token: "action", foreground: "#D4D4D4" },
+          // You can define token-specific styles here if needed
         ],
         colors: {
           "editor.background":
-            theme.editorBgColor || theme.defaultBgColor || "#000000",
+            theme.editorBgColor || theme.defaultBgColor || "#000000", // Editor background color (given)
           "editorCursor.foreground":
-            theme.editorCursorColor || theme.defaultPrimaryColor || "",
-          "editor.lineHighlightBackground": "#44403c",
-          "editorLineNumber.foreground": "#78716c",
-          "editor.selectionBackground": "#44403c",
-          "editorIndentGuide.background": "#78716c",
-          "editorIndentGuide.activeBackground": "#a8a29e",
-          "editorWhitespace.foreground": "#a8a29e",
+            theme.editorCursorColor || theme.defaultPrimaryColor || "", // Cursor color
+          "editor.lineHighlightBackground": "#44403c", // Highlighted line color
+          "editorLineNumber.foreground": "#78716c", // Line Numbers color
+          "editor.selectionBackground": "#44403c", // Selection color
+          "editor.foreground":
+            theme.editorTextColor || theme.defaultTextColor || "", // Main text color
+          "editorIndentGuide.background": "#78716c", // Indent guides color
+          "editorIndentGuide.activeBackground": "#a8a29e", // Active indent guides color
+          "editorWhitespace.foreground": "#a8a29e", // Whitespace symbols color
+          // Add more color overrides if needed here
         },
-      });
+      })
     }
 
-    monaco.editor.setTheme(themes.backstage.id);
+    // Apply the custom theme immediately after defining it
+    monaco.editor.setTheme(themes.backstage.id)
 
     const textModel: MonacoEditor.editor.ITextModel = monaco.editor.createModel(
-      draft,
-      fountainLanguageId,
-    );
-    setTextModel(textModel);
-  };
-
-  const handleCollapseAll = () => {
-    if (!editorRef.current) return;
-    editorRef.current.trigger("fold", "editor.foldAll", null);
-  };
-
-  const handleExpandAll = () => {
-    if (!editorRef.current) return;
-    editorRef.current.trigger("unfold", "editor.unfoldAll", null);
-  };
+      current || "",
+      "plaintext",
+    )
+    setTextModel(textModel)
+  }
 
   return (
     <div
       className="h-full w-full"
       onMouseEnter={() => setMouseIsInside(true)}
       onMouseLeave={() => setMouseIsInside(false)}
+      onBlur={publish}
     >
-      <div className="flex justify-end mb-2">
-        <button onClick={handleCollapseAll} className="m-1 text-xs">
-          Collapse All
-        </button>
-        <button onClick={handleExpandAll} className="m-1 text-xs">
-          Expand All
-        </button>
-      </div>
       <Editor
         height="100%"
         beforeMount={beforeMount}
-        onMount={onMount}
-        value={draft}
         theme={themeName}
+        onMount={onMount}
+        onChange={setCurrent}
         options={{
           fontSize: editorFontSize,
-          folding: true,
-          foldingStrategy: "auto",
-          automaticLayout: true,
-          scrollBeyondLastLine: false,
-          minimap: { enabled: false },
-          lineNumbers: "off",
-          glyphMargin: true,
-          fixedOverflowWidgets: true,
         }}
-        language={fountainLanguageId}
       />
     </div>
-  );
+  )
 }
