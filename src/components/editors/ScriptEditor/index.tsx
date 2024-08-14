@@ -10,6 +10,7 @@ import {
 import { useScriptEditor } from '@/services/editors/script-editor/useScriptEditor'
 import { useUI } from '@/services/ui'
 import { themes } from '@/services/ui/theme'
+import { ClapSegmentCategory } from '@aitube/clap'
 
 import './styles.css'
 
@@ -24,12 +25,22 @@ export function ScriptEditor() {
   const loadDraftFromClap = useScriptEditor((s) => s.loadDraftFromClap)
   const onDidScrollChange = useScriptEditor((s) => s.onDidScrollChange)
   const jumpCursorOnLineClick = useScriptEditor((s) => s.jumpCursorOnLineClick)
+  const highlightElements = useScriptEditor((s) => s.highlightElements)
+  const applyClassNameToKeywords = useScriptEditor(
+    (s) => s.applyClassNameToKeywords
+  )
 
   const clap = useTimeline((s: TimelineStore) => s.clap)
 
   useEffect(() => {
     loadDraftFromClap(clap)
   }, [clap])
+
+  useEffect(() => {
+    if (standaloneCodeEditor && clap) {
+      highlightElements()
+    }
+  }, [standaloneCodeEditor, clap])
 
   const scrollHeight = useScriptEditor((s) => s.scrollHeight)
 
@@ -55,10 +66,7 @@ export function ScriptEditor() {
         scrollTop: horizontalTimelineRatio,
       })
     }
-    // various things we can do here!
-    // move the scroll:
-    // editor.setScrollPosition({ scrollTop: horizontalTimelineRatio })
-
+        // let's do something basic for now: we disable the
     // Scroll to a specific line:
     // editor.revealLine(15);
 
@@ -96,22 +104,21 @@ export function ScriptEditor() {
         onDidScrollChange({ scrollTop, scrollLeft, scrollWidth, scrollHeight })
       }
     )
-
     // as an optimization we can use this later, for surgical edits,
     // to perform real time updates of the timeline
 
-    /*
-    textModel.onDidChangeContent(
-      (
-        modelContentChangedEvent: MonacoEditor.editor.IModelContentChangedEvent
-      ) => {
-        console.log('onDidChangeContent:')
-        for (const change of modelContentChangedEvent.changes) {
-          console.log(" - change:", change)
-        }
-      }
-    )
-      */
+    /* textModel.onDidChangeContent(
+          (
+            modelContentChangedEvent: MonacoEditor.editor.IModelContentChangedEvent
+          ) => {
+            console.log('onDidChangeContent:')
+            for (const change of modelContentChangedEvent.changes) {
+              console.log(" - change:", change)
+            }
+          }
+        )
+    */
+    highlightElements()
   }
 
   const setMonaco = useScriptEditor((s) => s.setMonaco)
@@ -123,42 +130,96 @@ export function ScriptEditor() {
   const beforeMount = (monaco: Monaco) => {
     setMonaco(monaco)
 
-    // create our themes
+    // Create themes
     for (const theme of Object.values(themes)) {
-      // console.log("loading editor theme:", theme)
-      // Define a custom theme with the provided color palette
       monaco.editor.defineTheme(theme.id, {
-        base: 'vs-dark', // Base theme (you can change to vs for a lighter theme if preferred)
-        inherit: true, // Inherit the default rules
+        base: 'vs-dark',
+        inherit: true,
         rules: [
-          // You can define token-specific styles here if needed
+          { token: 'scene.int', foreground: '#4EC9B0' },
+          { token: 'scene.ext', foreground: '#9CDCFE' },
+          { token: 'character', foreground: '#DCDCAA' },
+          { token: 'dialog', foreground: '#D4D4D4' },
+          { token: 'parenthetical', foreground: '#B5CEA8' },
+          { token: 'transition', foreground: '#C586C0' },
+          { token: 'shot', foreground: '#CE9178' },
+          { token: 'action', foreground: '#D4D4D4' },
         ],
         colors: {
           'editor.background':
-            theme.editorBgColor || theme.defaultBgColor || '#000000', // Editor background color (given)
+            theme.editorBgColor || theme.defaultBgColor || '#000000',
           'editorCursor.foreground':
-            theme.editorCursorColor || theme.defaultPrimaryColor || '', // Cursor color
-          'editor.lineHighlightBackground': '#44403c', // Highlighted line color
-          'editorLineNumber.foreground': '#78716c', // Line Numbers color
-          'editor.selectionBackground': '#44403c', // Selection color
+            theme.editorCursorColor || theme.defaultPrimaryColor || '',
+          'editor.lineHighlightBackground': '#44403c',
+          'editorLineNumber.foreground': '#78716c',
+          'editor.selectionBackground': '#44403c',
           'editor.foreground':
-            theme.editorTextColor || theme.defaultTextColor || '', // Main text color
-          'editorIndentGuide.background': '#78716c', // Indent guides color
-          'editorIndentGuide.activeBackground': '#a8a29e', // Active indent guides color
-          'editorWhitespace.foreground': '#a8a29e', // Whitespace symbols color
-          // Add more color overrides if needed here
+            theme.editorTextColor || theme.defaultTextColor || '',
+          'editorIndentGuide.background': '#78716c',
+          'editorIndentGuide.activeBackground': '#a8a29e',
+          'editorWhitespace.foreground': '#a8a29e',
         },
       })
     }
 
-    // Apply the custom theme immediately after defining it
     monaco.editor.setTheme(themes.backstage.id)
 
     const textModel: MonacoEditor.editor.ITextModel = monaco.editor.createModel(
       current || '',
-      'plaintext'
+      'fountain'
     )
     setTextModel(textModel)
+
+    // Register fountain language
+    monaco.languages.register({ id: 'fountain' })
+    monaco.languages.setMonarchTokensProvider('fountain', {
+      tokenizer: {
+        root: [
+          [/^(INT|I\/E)(.+)/, 'scene.int'],
+          [/^(EXT)(.+)/, 'scene.ext'],
+          [/^[A-Z][A-Z\s]+$/, 'character'],
+          [/^\(.+\)$/, 'parenthetical'],
+          [/^>.+<$/, 'transition'],
+          [/^(?:FADE (?:IN|OUT|TO)|CUT TO:)$/, 'transition'],
+          [/^(?:ANGLE ON|CLOSE ON|PAN|TRACKING|MOVING):.+$/, 'shot'],
+          [/^(?![A-Z]+$|\(|\>).+/, 'action'],
+        ],
+      },
+    })
+
+    // Setup code folding
+    monaco.languages.registerFoldingRangeProvider('fountain', {
+      provideFoldingRanges: function (model, context, token) {
+        const lines = model.getLinesContent()
+        const ranges = []
+        let sceneStart = -1
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim()
+          if (/^(INT|EXT|I\/E)/.test(line)) {
+            if (sceneStart !== -1) {
+              ranges.push({
+                start: sceneStart + 1,
+                end: i,
+                kind: monaco.languages.FoldingRangeKind.Region,
+              })
+            }
+            sceneStart = i
+          }
+        }
+
+        // Add the last scene if there is one
+        if (sceneStart !== -1 && sceneStart < lines.length - 1) {
+          ranges.push({
+            start: sceneStart + 1,
+            end: lines.length,
+            kind: monaco.languages.FoldingRangeKind.Region,
+          })
+        }
+
+        return ranges
+      },
+    })
   }
 
   return (
@@ -176,6 +237,9 @@ export function ScriptEditor() {
         onChange={setCurrent}
         options={{
           fontSize: editorFontSize,
+          language: 'fountain',
+          folding: true,
+          foldingStrategy: 'auto',
         }}
       />
     </div>
