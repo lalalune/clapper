@@ -1,5 +1,9 @@
-import { leftBarTrackScaleWidth, useTimeline } from '@aitube/timeline'
 import Editor, { Monaco } from '@monaco-editor/react'
+import {
+  leftBarTrackScaleWidth,
+  TimelineStore,
+  useTimeline,
+} from '@aitube/timeline'
 import MonacoEditor from 'monaco-editor'
 import { useEffect } from 'react'
 
@@ -7,7 +11,6 @@ import { useScriptEditor } from '@/services/editors/script-editor/useScriptEdito
 import { useUI } from '@/services/ui'
 import { themes } from '@/services/ui/theme'
 
-import { ScriptEditorStore } from '@aitube/clapper-services'
 import './styles.css'
 
 export function ScriptEditor() {
@@ -18,25 +21,14 @@ export function ScriptEditor() {
   const current = useScriptEditor((s) => s.current)
   const setCurrent = useScriptEditor((s) => s.setCurrent)
   const publish = useScriptEditor((s) => s.publish)
-  const onDidScrollChange = useScriptEditor(
-    (s: ScriptEditorStore) => s.onDidScrollChange
-  )
-  const jumpCursorOnLineClick = useScriptEditor(
-    (s: { jumpCursorOnLineClick: any }) => s.jumpCursorOnLineClick
-  )
-  const highlightElements = useScriptEditor(
-    (s: { highlightElements: any }) => s.highlightElements
-  )
-  const applyClassNameToKeywords = useScriptEditor(
-    (s: { applyClassNameToKeywords: any }) => s.applyClassNameToKeywords
-  )
+  const onDidScrollChange = useScriptEditor((s) => s.onDidScrollChange)
+  const jumpCursorOnLineClick = useScriptEditor((s) => s.jumpCursorOnLineClick)
+  const highlightElements = useScriptEditor((s) => s.highlightElements)
 
-  const scrollHeight = useScriptEditor(
-    (s: { scrollHeight: any }) => s.scrollHeight
-  )
+  const scrollHeight = useScriptEditor((s) => s.scrollHeight)
 
-  const scrollX = useTimeline((s: { scrollX: any }) => s.scrollX)
-  const contentWidth = useTimeline((s: { contentWidth: any }) => s.contentWidth)
+  const scrollX = useTimeline((s) => s.scrollX)
+  const contentWidth = useTimeline((s) => s.contentWidth)
   const horizontalTimelineRatio = Math.round(
     ((scrollX - leftBarTrackScaleWidth) / contentWidth) * scrollHeight - 31
   )
@@ -98,38 +90,37 @@ export function ScriptEditor() {
     // as an optimization we can use this later, for surgical edits,
     // to perform real time updates of the timeline
 
-    /* textModel.onDidChangeContent(
-          (
-            modelContentChangedEvent: MonacoEditor.editor.IModelContentChangedEvent
-          ) => {
-            console.log('onDidChangeContent:')
-            for (const change of modelContentChangedEvent.changes) {
-              console.log(" - change:", change)
-            }
-          }
-        )
-    */
+    /*
+    textModel.onDidChangeContent(
+      (
+        modelContentChangedEvent: MonacoEditor.editor.IModelContentChangedEvent
+      ) => {
+        console.log('onDidChangeContent:')
+        for (const change of modelContentChangedEvent.changes) {
+          console.log(" - change:", change)
+        }
+      }
+    )
+      */
     highlightElements()
   }
 
-  const setMonaco = useScriptEditor((s: { setMonaco: any }) => s.setMonaco)
-  const setTextModel = useScriptEditor(
-    (s: { setTextModel: any }) => s.setTextModel
-  )
-  const setMouseIsInside = useScriptEditor(
-    (s: { setMouseIsInside: any }) => s.setMouseIsInside
-  )
+  const setMonaco = useScriptEditor((s) => s.setMonaco)
+  const setTextModel = useScriptEditor((s) => s.setTextModel)
+  const setMouseIsInside = useScriptEditor((s) => s.setMouseIsInside)
   const themeName = useUI((s) => s.themeName)
   const editorFontSize = useUI((s) => s.editorFontSize)
 
   const beforeMount = (monaco: Monaco) => {
     setMonaco(monaco)
 
-    // Create themes
+    // create our themes
     for (const theme of Object.values(themes)) {
+      // console.log("loading editor theme:", theme)
+      // Define a custom theme with the provided color palette
       monaco.editor.defineTheme(theme.id, {
-        base: 'vs-dark',
-        inherit: true,
+        base: 'vs-dark', // Base theme (you can change to vs for a lighter theme if preferred)
+        inherit: true, // Inherit the default rules
         rules: [
           { token: 'scene.int', foreground: '#4EC9B0' },
           { token: 'scene.ext', foreground: '#9CDCFE' },
@@ -142,17 +133,17 @@ export function ScriptEditor() {
         ],
         colors: {
           'editor.background':
-            theme.editorBgColor || theme.defaultBgColor || '#000000',
+            theme.editorBgColor || theme.defaultBgColor || '#000000', // Editor background color (given)
           'editorCursor.foreground':
-            theme.editorCursorColor || theme.defaultPrimaryColor || '',
-          'editor.lineHighlightBackground': '#44403c',
-          'editorLineNumber.foreground': '#78716c',
-          'editor.selectionBackground': '#44403c',
+            theme.editorCursorColor || theme.defaultPrimaryColor || '', // Cursor color
+          'editor.lineHighlightBackground': '#44403c', // Highlighted line color
+          'editorLineNumber.foreground': '#78716c', // Line Numbers color
+          'editor.selectionBackground': '#44403c', // Selection color
           'editor.foreground':
-            theme.editorTextColor || theme.defaultTextColor || '',
-          'editorIndentGuide.background': '#78716c',
-          'editorIndentGuide.activeBackground': '#a8a29e',
-          'editorWhitespace.foreground': '#a8a29e',
+            theme.editorTextColor || theme.defaultTextColor || '', // Main text color
+          'editorIndentGuide.background': '#78716c', // Indent guides color
+          'editorIndentGuide.activeBackground': '#a8a29e', // Active indent guides color
+          'editorWhitespace.foreground': '#a8a29e', // Whitespace symbols color
         },
       })
     }
