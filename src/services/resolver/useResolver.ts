@@ -18,7 +18,13 @@ import {
   segmentVisibilityPriority,
   TimelineSegment,
 } from '@aitube/timeline'
-import { getVideoPrompt } from '@aitube/engine'
+import {
+  getBackgroundAudioPrompt,
+  getSoundPrompt,
+  getMusicPrompt,
+  getSpeechForegroundAudioPrompt,
+  getVideoPrompt,
+} from '@aitube/engine'
 import { ResolverStore } from '@aitube/clapper-services'
 
 import { getDefaultResolverState } from './getDefaultResolverState'
@@ -450,16 +456,21 @@ export const useResolver = create<ResolverStore>((set, get) => ({
   resolveSegment: async (
     segment: TimelineSegment
   ): Promise<TimelineSegment> => {
-    const settings = useSettings.getState().getSettings()
+    const settings = useSettings.getState().getRequestSettings()
 
     const timeline: TimelineStore = useTimeline.getState()
 
     // note: do NOT use the visibleSegments here
     // that's because resolveSegment is 100% asynchronous,
     // meaning it might be called on invisible segments too!
-    const { clap, segments: allSegments, trackSilentChangeInSegment } = timeline
+    const {
+      meta,
+      entityIndex,
+      segments: allSegments,
+      trackSilentChangeInSegment,
+    } = timeline
 
-    if (!clap?.meta || !allSegments.length) {
+    if (!allSegments.length) {
       return segment
       // throw new Error(`please call setSegmentRender(...) first`)
     }
@@ -477,7 +488,7 @@ export const useResolver = create<ResolverStore>((set, get) => ({
 
     segment.status = ClapSegmentStatus.IN_PROGRESS
 
-    const entities = clap.entityIndex || {}
+    const entities = entityIndex || {}
 
     const speakingCharactersIds = segments
       .map((s) =>
@@ -522,6 +533,13 @@ export const useResolver = create<ResolverStore>((set, get) => ({
       .filter((x) => x)
       .join(', ')
 
+    const positiveVoicePrompt = getSpeechForegroundAudioPrompt(segments)
+    const positiveAudioPrompt = getSoundPrompt(segments)
+    const positiveMusicPrompt = getMusicPrompt(segments)
+
+    // we can also create a background audio ambiance by calling
+    // getBackgroundAudioPrompt()
+
     // note: not all AI models will support those parameters.
     // in 2024, even the "best" proprietary video models like Sora, Veo, Kling, Gen-3, Dream Machine etc..
     // don't support voice input for lip syncing, for instance.
@@ -541,7 +559,15 @@ export const useResolver = create<ResolverStore>((set, get) => ({
       },
       voice: {
         identity: `${mainCharacterEntity?.audioId || ''}`,
-        positive: '',
+        positive: positiveVoicePrompt,
+        negative: '',
+      },
+      audio: {
+        positive: positiveAudioPrompt,
+        negative: '',
+      },
+      music: {
+        positive: positiveMusicPrompt,
         negative: '',
       },
     }
@@ -561,7 +587,7 @@ export const useResolver = create<ResolverStore>((set, get) => ({
       generalCharactersIds,
       mainCharacterId,
       mainCharacterEntity,
-      meta: clap.meta,
+      meta,
       prompts,
     }
 

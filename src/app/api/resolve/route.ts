@@ -4,19 +4,26 @@ import {
   ClapSegmentCategory,
   ClapSegmentStatus,
   getClapAssetSourceType,
+  ClapWorkflowProvider,
+  ClapWorkflow,
+  ClapAssetSource,
+  ClapWorkflowEngine,
 } from '@aitube/clap'
 
 import {
   resolveSegmentUsingHuggingFace,
   resolveSegmentUsingComfyReplicate,
   resolveSegmentUsingReplicate,
-  resolveSegmentUsingComfyComfyIcu,
+  resolveSegmentUsingComfyIcu,
+  resolveSegmentUsingComfyDeploy,
   resolveSegmentUsingFalAi,
+  resolveSegmentUsingAiTube,
   resolveSegmentUsingModelsLab,
   resolveSegmentUsingStabilityAi,
+  resolveSegmentUsingComfyUI,
 } from './providers'
 
-import { ComputeProvider, ResolveRequest } from '@aitube/clapper-services'
+import { ResolveRequest } from '@aitube/clapper-services'
 import { decodeOutput } from '@/lib/utils/decodeOutput'
 import { getTypeAndExtension } from '@/lib/utils/getTypeAndExtension'
 import { getMediaInfo } from '@/lib/ffmpeg/getMediaInfo'
@@ -29,45 +36,66 @@ export async function POST(req: NextRequest) {
   // await throwIfInvalidToken(req.headers.get("Authorization"))
   const request = (await req.json()) as ResolveRequest
 
-  const provider =
+  const workflow: ClapWorkflow | undefined =
     request.segment.category === ClapSegmentCategory.STORYBOARD
-      ? request.settings.imageProvider
+      ? request.settings.imageGenerationWorkflow
       : request.segment.category === ClapSegmentCategory.VIDEO
-        ? request.settings.videoProvider
+        ? request.settings.videoGenerationWorkflow
         : request.segment.category === ClapSegmentCategory.DIALOGUE
-          ? request.settings.voiceProvider
+          ? request.settings.voiceGenerationWorkflow
           : request.segment.category === ClapSegmentCategory.SOUND
-            ? request.settings.soundProvider
+            ? request.settings.soundGenerationWorkflow
             : request.segment.category === ClapSegmentCategory.MUSIC
-              ? request.settings.musicProvider
-              : null
+              ? request.settings.musicGenerationWorkflow
+              : undefined
+
+  if (!workflow) {
+    throw new Error(`request to /api/resolve is missing the .workflow field`)
+  }
+
+  const provider: ClapWorkflowProvider | undefined =
+    workflow.provider || undefined
 
   if (!provider) {
-    throw new Error(
-      `Segments of category ${request.segment.category} are not supported yet`
-    )
+    throw new Error(`request to /api/resolve is missing the .provider field`)
+  }
+
+  const engine: ClapWorkflowEngine | undefined = workflow.engine || undefined
+
+  if (!engine) {
+    throw new Error(`request to /api/resolve is missing the .engine field`)
   }
 
   // console.log(`API ResolveRequest = `, request.settings)
   const resolveSegment =
-    provider === ComputeProvider.HUGGINGFACE
-      ? resolveSegmentUsingHuggingFace
-      : provider === ComputeProvider.COMFY_HUGGINGFACE
+    engine === ClapWorkflowEngine.COMFYUI_WORKFLOW
+      ? provider === ClapWorkflowProvider.REPLICATE
         ? resolveSegmentUsingComfyReplicate
-        : provider === ComputeProvider.REPLICATE
+        : provider === ClapWorkflowProvider.COMFYUI
+          ? resolveSegmentUsingComfyUI
+          : provider === ClapWorkflowProvider.COMFYICU
+            ? resolveSegmentUsingComfyIcu
+            : provider === ClapWorkflowProvider.COMFYDEPLOY
+              ? resolveSegmentUsingComfyDeploy
+              : null
+      : provider === ClapWorkflowProvider.HUGGINGFACE
+        ? resolveSegmentUsingHuggingFace
+        : provider === ClapWorkflowProvider.REPLICATE
           ? resolveSegmentUsingReplicate
-          : provider === ComputeProvider.COMFY_COMFYICU
-            ? resolveSegmentUsingComfyComfyIcu
-            : provider === ComputeProvider.STABILITYAI
-              ? resolveSegmentUsingStabilityAi
-              : provider === ComputeProvider.FALAI
-                ? resolveSegmentUsingFalAi
-                : provider === ComputeProvider.MODELSLAB
-                  ? resolveSegmentUsingModelsLab
+          : provider === ClapWorkflowProvider.STABILITYAI
+            ? resolveSegmentUsingStabilityAi
+            : provider === ClapWorkflowProvider.FALAI
+              ? resolveSegmentUsingFalAi
+              : provider === ClapWorkflowProvider.MODELSLAB
+                ? resolveSegmentUsingModelsLab
+                : provider === ClapWorkflowProvider.AITUBE
+                  ? resolveSegmentUsingAiTube
                   : null
 
   if (!resolveSegment) {
-    throw new Error(`Provider ${provider} is not supported yet`)
+    throw new Error(
+      `Engine "${engine}" is not supported by "${provider}" yet. If you believe this is a mistake, please open a Pull Request (with working code) to fix it. Thank you!`
+    )
   }
 
   let segment = request.segment
@@ -113,7 +141,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error(`failed to generate a segment: ${err}`)
     segment.assetUrl = ''
-    segment.assetSourceType = getClapAssetSourceType(segment.assetUrl)
+    segment.assetSourceType = ClapAssetSource.EMPTY
     segment.assetDurationInMs = 0
     segment.outputGain = 0
     segment.status = ClapSegmentStatus.TO_GENERATE

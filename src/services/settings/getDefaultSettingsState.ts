@@ -1,21 +1,19 @@
 import { RenderingStrategy } from '@aitube/timeline'
-import {
-  ComfyIcuAccelerator,
-  ComputeProvider,
-  SettingsState,
-} from '@aitube/clapper-services'
+import { ComfyIcuAccelerator, SettingsState } from '@aitube/clapper-services'
 
 import { defaultWorkflowForImages } from './workflows/image'
 
 export function getDefaultSettingsState(): SettingsState {
   const state: SettingsState = {
-    customComfyUiApiKey: '',
+    comfyUiClientId: 'clapper',
     replicateApiKey: '',
     comfyIcuApiKey: '',
     comfyIcuAccelerator: ComfyIcuAccelerator.L4,
+    comfyDeployApiKey: '',
     huggingFaceApiKey: '',
     modelsLabApiKey: '',
     falAiApiKey: '',
+    aiTubeApiKey: '',
     openaiApiKey: '',
     googleApiKey: '',
     groqApiKey: '',
@@ -31,19 +29,6 @@ export function getDefaultSettingsState(): SettingsState {
     broadcastObsServerPort: 4455,
     broadcastObsServerPass: '',
 
-    assistantProvider: ComputeProvider.NONE,
-    imageProvider: ComputeProvider.NONE,
-    imageDepthProvider: ComputeProvider.NONE,
-    imageSegmentationProvider: ComputeProvider.NONE,
-    imageUpscalingProvider: ComputeProvider.NONE,
-    videoProvider: ComputeProvider.NONE,
-    videoDepthProvider: ComputeProvider.NONE,
-    videoSegmentationProvider: ComputeProvider.NONE,
-    videoUpscalingProvider: ComputeProvider.NONE,
-    soundProvider: ComputeProvider.NONE,
-    voiceProvider: ComputeProvider.NONE,
-    musicProvider: ComputeProvider.NONE,
-
     censorNotForAllAudiencesContent: false,
 
     imagePromptPrefix: 'screencap',
@@ -55,20 +40,20 @@ export function getDefaultSettingsState(): SettingsState {
     videoNegativePrompt:
       'black banding, ugly, imperfect, cropped, low resolution',
 
-    assistantModel: '',
-    assistantTurboModel: '',
-    imageGenerationModel: '',
-    imageGenerationTurboModel: '',
-    imageUpscalingModel: '',
-    imageDepthModel: '',
-    imageSegmentationModel: '',
-    videoGenerationModel: '',
-    videoUpscalingModel: '',
-    videoDepthModel: '',
-    videoSegmentationModel: '',
-    soundGenerationModel: '',
-    voiceGenerationModel: '',
-    musicGenerationModel: '',
+    assistantWorkflow: '',
+    assistantTurboWorkflow: '',
+    imageGenerationWorkflow: '',
+    imageGenerationTurboWorkflow: '',
+    imageUpscalingWorkflow: '',
+    imageDepthWorkflow: '',
+    imageSegmentationWorkflow: '',
+    videoGenerationWorkflow: '',
+    videoUpscalingWorkflow: '',
+    videoDepthWorkflow: '',
+    videoSegmentationWorkflow: '',
+    soundGenerationWorkflow: '',
+    voiceGenerationWorkflow: '',
+    musicGenerationWorkflow: '',
 
     imageRenderingStrategy: RenderingStrategy.ON_DEMAND,
     imageUpscalingRenderingStrategy: RenderingStrategy.ON_DEMAND,
@@ -90,6 +75,8 @@ export function getDefaultSettingsState(): SettingsState {
     comfyWorkflowForVoice: '{}',
     comfyWorkflowForSound: '{}',
     comfyWorkflowForMusic: '{}',
+
+    comfyUiApiUrl: 'http://localhost:8188',
 
     // those are not designed for Hugging Face specifically,
     // but to be compatible with any Gradio API URL that the

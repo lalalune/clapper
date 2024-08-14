@@ -1,51 +1,44 @@
-import React, { useEffect } from 'react'
-import MonacoEditor from 'monaco-editor'
+import { leftBarTrackScaleWidth, useTimeline } from '@aitube/timeline'
 import Editor, { Monaco } from '@monaco-editor/react'
-import {
-  leftBarTrackScaleWidth,
-  TimelineStore,
-  useTimeline,
-} from '@aitube/timeline'
+import MonacoEditor from 'monaco-editor'
+import { useEffect } from 'react'
 
 import { useScriptEditor } from '@/services/editors/script-editor/useScriptEditor'
 import { useUI } from '@/services/ui'
 import { themes } from '@/services/ui/theme'
-import { ClapSegmentCategory } from '@aitube/clap'
 
+import { ScriptEditorStore } from '@aitube/clapper-services'
 import './styles.css'
 
 export function ScriptEditor() {
-  const standaloneCodeEditor = useScriptEditor((s) => s.standaloneCodeEditor)
+  const standaloneCodeEditor = useScriptEditor(
+    (s) => s.standaloneCodeEditor
+  )
   const setStandaloneCodeEditor = useScriptEditor(
     (s) => s.setStandaloneCodeEditor
   )
   const current = useScriptEditor((s) => s.current)
   const setCurrent = useScriptEditor((s) => s.setCurrent)
   const publish = useScriptEditor((s) => s.publish)
-  const loadDraftFromClap = useScriptEditor((s) => s.loadDraftFromClap)
-  const onDidScrollChange = useScriptEditor((s) => s.onDidScrollChange)
-  const jumpCursorOnLineClick = useScriptEditor((s) => s.jumpCursorOnLineClick)
-  const highlightElements = useScriptEditor((s) => s.highlightElements)
+  const onDidScrollChange = useScriptEditor(
+    (s: ScriptEditorStore) => s.onDidScrollChange
+  )
+  const jumpCursorOnLineClick = useScriptEditor(
+    (s: { jumpCursorOnLineClick: any }) => s.jumpCursorOnLineClick
+  )
+  const highlightElements = useScriptEditor(
+    (s: { highlightElements: any }) => s.highlightElements
+  )
   const applyClassNameToKeywords = useScriptEditor(
-    (s) => s.applyClassNameToKeywords
+    (s: { applyClassNameToKeywords: any }) => s.applyClassNameToKeywords
   )
 
-  const clap = useTimeline((s: TimelineStore) => s.clap)
+  const scrollHeight = useScriptEditor(
+    (s: { scrollHeight: any }) => s.scrollHeight
+  )
 
-  useEffect(() => {
-    loadDraftFromClap(clap)
-  }, [clap])
-
-  useEffect(() => {
-    if (standaloneCodeEditor && clap) {
-      highlightElements()
-    }
-  }, [standaloneCodeEditor, clap])
-
-  const scrollHeight = useScriptEditor((s) => s.scrollHeight)
-
-  const scrollX = useTimeline((s) => s.scrollX)
-  const contentWidth = useTimeline((s) => s.contentWidth)
+  const scrollX = useTimeline((s: { scrollX: any }) => s.scrollX)
+  const contentWidth = useTimeline((s: { contentWidth: any }) => s.contentWidth)
   const horizontalTimelineRatio = Math.round(
     ((scrollX - leftBarTrackScaleWidth) / contentWidth) * scrollHeight - 31
   )
@@ -66,7 +59,7 @@ export function ScriptEditor() {
         scrollTop: horizontalTimelineRatio,
       })
     }
-        // let's do something basic for now: we disable the
+    // let's do something basic for now: we disable the
     // Scroll to a specific line:
     // editor.revealLine(15);
 
@@ -121,9 +114,13 @@ export function ScriptEditor() {
     highlightElements()
   }
 
-  const setMonaco = useScriptEditor((s) => s.setMonaco)
-  const setTextModel = useScriptEditor((s) => s.setTextModel)
-  const setMouseIsInside = useScriptEditor((s) => s.setMouseIsInside)
+  const setMonaco = useScriptEditor((s: { setMonaco: any }) => s.setMonaco)
+  const setTextModel = useScriptEditor(
+    (s: { setTextModel: any }) => s.setTextModel
+  )
+  const setMouseIsInside = useScriptEditor(
+    (s: { setMouseIsInside: any }) => s.setMouseIsInside
+  )
   const themeName = useUI((s) => s.themeName)
   const editorFontSize = useUI((s) => s.editorFontSize)
 
