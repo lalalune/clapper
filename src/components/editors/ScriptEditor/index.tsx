@@ -11,9 +11,7 @@ import { ScriptEditorStore } from '@aitube/clapper-services'
 import './styles.css'
 
 export function ScriptEditor() {
-  const standaloneCodeEditor = useScriptEditor(
-    (s) => s.standaloneCodeEditor
-  )
+  const standaloneCodeEditor = useScriptEditor((s) => s.standaloneCodeEditor)
   const setStandaloneCodeEditor = useScriptEditor(
     (s) => s.setStandaloneCodeEditor
   )
